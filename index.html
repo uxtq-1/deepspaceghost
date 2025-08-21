@@ -173,33 +173,6 @@
     }
     .hp-label{ display:none !important; }
 
-    /* ====== v2 Modal ====== */
-    .modal-backdrop{
-      position:fixed; inset:0; background:rgba(0,0,0,.55);
-      display:none; align-items:center; justify-content:center;
-      z-index:10050;
-    }
-    .modal{
-      background:var(--panel);
-      color:#fff;
-      border:2px solid var(--clr-accent);
-      border-radius:16px;
-      width:min(92vw, 420px);
-      padding:16px;
-      box-shadow:0 12px 40px rgba(0,0,0,.5);
-    }
-    .modal header{
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-      margin-bottom:10px;
-    }
-    .modal h2{ font-size:1rem; margin:0; }
-    .modal .close{
-      background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff;
-      border-radius:8px; padding:.25rem .45rem; font-size:.8rem; cursor:pointer;
-    }
-    .modal .content{ padding:8px 0 0; }
-    .verify-hint{ margin-top:10px; font-size:.88rem; color:#ddd; }
-
     @media(max-width:480px){
       #chatbot-container{ left:3vw; right:3vw; }
     }
@@ -270,24 +243,8 @@
     </div>
   </div>
 
-  <!-- reCAPTCHA v2 Modal -->
-  <div id="v2-backdrop" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="v2-title">
-      <header>
-        <h2 id="v2-title">Verify you’re human</h2>
-        <button class="close" type="button" id="v2-close">Close</button>
-      </header>
-      <div class="content">
-        <div id="v2-widget" class="g-recaptcha"></div>
-        <div class="verify-hint">Please complete the checkbox above to continue.</div>
-      </div>
-    </div>
-  </div>
-
   <script>
     /* ===== Config: replace with your real keys/URLs ===== */
-    const RECAPTCHA_V2_SITE_KEY = 'YOUR_RECAPTCHA_V2_SITE_KEY';
-    const RECAPTCHA_V3_SITE_KEY = 'YOUR_RECAPTCHA_V3_SITE_KEY';
     const WORKER_CHAT_URL        = 'https://your-cloudflare-worker.example.com/chat';
     const WORKER_END_SESSION_URL = 'https://your-cloudflare-worker.example.com/end-session';
     const WORKER_HONEYPOT_URL    = 'https://your-cloudflare-worker.example.com/honeypot-trip';
@@ -314,16 +271,7 @@
     const hpText = qs('#hp_text');
     const hpCheck= qs('#hp_check');
 
-    /* v2 Modal */
-    const v2Backdrop = qs('#v2-backdrop');
-    const v2Close    = qs('#v2-close');
-    const v2WidgetEl = qs('#v2-widget');
-
     /* ===== State ===== */
-    let v3Ready   = false;
-    let v2Solved  = false;
-    let v2WidgetId = null;
-    let v2Open    = false;
 
     /* ===== Brand builder (spaces preserved) ===== */
     function buildBrand(text){
@@ -363,7 +311,7 @@
       const maxPx=48;
       input.style.height=Math.min(input.scrollHeight, maxPx)+'px';
     }
-    input.addEventListener('input', ()=>{ autoGrow(); maybePromptV2(); updateSendEnabled(); });
+    input.addEventListener('input', ()=>{ autoGrow(); updateSendEnabled(); });
     window.addEventListener('load', ()=>{ autoGrow(); updateSendEnabled(); });
 
     /* Dialogue helpers */
@@ -396,75 +344,17 @@
       hpCheck.addEventListener(ev, ()=>{ reportHoneypot('hp_check_ticked'); lockUIForHoneypot(); }, { passive:true });
     });
 
-    /* ===== reCAPTCHA API (single load, explicit) ===== */
-    (function loadRecaptcha(){
-      const s=document.createElement('script');
-      s.src='https://www.google.com/recaptcha/api.js?render=explicit';
-      s.async=true; s.defer=true;
-      document.head.appendChild(s);
-    })();
-
-    /* v3 ready poll */
-    const recaptchaPoll = setInterval(()=>{
-      if(window.grecaptcha && typeof grecaptcha.ready==='function'){
-        clearInterval(recaptchaPoll);
-        grecaptcha.ready(()=>{ v3Ready=true; updateSendEnabled(); });
-      }
-    }, 250);
-
-    /* Render v2 widget lazily inside modal */
-    function ensureV2Widget(){
-      if(v2WidgetId!==null || !(window.grecaptcha && grecaptcha.render)) return;
-      v2WidgetId = grecaptcha.render(v2WidgetEl, {
-        sitekey: RECAPTCHA_V2_SITE_KEY,
-        callback: (token)=>{
-          v2Solved = !!token;
-          updateSendEnabled();
-          hideV2Modal();            // auto-close on solve
-        },
-        'expired-callback': ()=>{
-          v2Solved=false; updateSendEnabled();
-        },
-        'error-callback': ()=>{
-          v2Solved=false; updateSendEnabled();
-          alert('reCAPTCHA v2 error, please try again.');
-        }
-      });
-    }
-
-    function showV2Modal(){
-      if(v2Solved || v2Open) return;
-      v2Backdrop.style.display='flex';
-      v2Backdrop.setAttribute('aria-hidden','false');
-      v2Open=true;
-      ensureV2Widget();
-    }
-    function hideV2Modal(){
-      v2Backdrop.style.display='none';
-      v2Backdrop.setAttribute('aria-hidden','true');
-      v2Open=false;
-    }
-    v2Close.addEventListener('click', hideV2Modal);
-    /* click outside modal content → close */
-    v2Backdrop.addEventListener('click', (e)=>{ if(e.target===v2Backdrop) hideV2Modal(); });
-
-    /* ESC key: close modal if open, otherwise close chat */
+    /* ESC key: close chat */
     document.addEventListener('keydown', (e)=>{
       if(e.key==='Escape'){
-        if(v2Open){ hideV2Modal(); }
-        else { closeChat(); }
+        closeChat();
       }
     });
 
-    /* Prompt v2 when user starts typing and not solved */
-    function maybePromptV2(){
-      if(input.value.trim().length>0 && !v2Solved) showV2Modal();
-    }
-
-    /* ===== Enable/disable Send (STRICT): requires text + v3 ready + v2 solved ===== */
+    /* ===== Enable/disable Send: requires text ===== */
     function updateSendEnabled(){
       const hasText = input.value.trim().length > 0;
-      sendBtn.disabled = !(hasText && v3Ready && v2Solved) || input.disabled;
+      sendBtn.disabled = !hasText || input.disabled;
     }
 
     /* ===== Enter to submit (Shift+Enter = newline) ===== */
@@ -472,7 +362,6 @@
       if(e.key==='Enter' && !e.shiftKey){
         e.preventDefault();
         if(sendBtn.disabled){
-          if(!v2Solved) showV2Modal();   // nudge to solve v2
           return;
         }
         gridForm.requestSubmit();
@@ -499,24 +388,13 @@
       input.value=''; autoGrow(); updateSendEnabled();
       addMsg('…','bot');
 
-      // v3 token per request
-      let v3token='';
-      try{
-        v3token = await grecaptcha.execute(RECAPTCHA_V3_SITE_KEY, { action:'chat_send' });
-      }catch(err){
-        log.lastChild.textContent = 'Security: reCAPTCHA v3 unavailable. Try again later.';
-        return;
-      }
-
-      // Send to Worker with v2 solved + v3 token
+      // Send to Worker
       try{
         const r = await fetch(WORKER_CHAT_URL, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            message: msg,
-            recaptchaV2Solved: v2Solved,
-            recaptchaV3Token: v3token
+            message: msg
           })
         });
         const d = await r.json();
@@ -543,7 +421,6 @@
       container.setAttribute('aria-hidden','true');
       openBtn.style.display='none';        // fully closed (no reopen FAB)
       openBtn.setAttribute('aria-expanded','false');
-      hideV2Modal();
     }
     closeBtn.addEventListener('click', closeChat);
 
@@ -614,7 +491,5 @@
     window.addEventListener('load', ()=> setTimeout(playShine, 350), { once:true });
   </script>
 
-  <!-- Single reCAPTCHA API load (explicit). Used for: v2 render + v3 execute(sitekey). -->
-  <script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
 </body>
 </html>
