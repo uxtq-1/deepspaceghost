@@ -343,7 +343,7 @@
       hpText.addEventListener(ev, ()=>{ reportHoneypot('hp_text_touched'); lockUIForHoneypot(); }, { passive:true });
       hpCheck.addEventListener(ev, ()=>{ reportHoneypot('hp_check_ticked'); lockUIForHoneypot(); }, { passive:true });
     });
-
+    
     /* ESC key: close chat */
     document.addEventListener('keydown', (e)=>{
       if(e.key==='Escape'){
