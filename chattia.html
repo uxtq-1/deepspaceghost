@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
+  <title>Chattia</title>
+
+  <!-- Font Awesome 6 (Cloudflare CDN, SRI, CORS-safe) -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    integrity="sha512-RXf+QSDCUqpphKAa+WAc3XQ8fE5H1aO/8e2wY+8Q1n8yVwDh1RZTf1TDN8E+u1n7eU5KyY7X2Qo+hqeZZn+UAQ=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <style>
+    :root{
+      --clr-primary:#00c4ff;
+      --clr-accent:#ff3bdb;
+
+      --bg:#ffffff;
+      --text:#333333;
+      --panel:#251541;
+      --panel-2:#2b1448;
+      --panel-3:#1b0e2d;
+      --input-bg:#f5f2fa;
+      --input-bd:#cbb3f6;
+      --text-inv:#ffffff;
+    }
+    body.dark{
+      --bg:#121212;
+      --text:#f0f0f0;
+      --panel:#140f24;
+      --panel-2:#1a1030;
+      --panel-3:#0e0a1a;
+      --input-bg:#261d3f;
+      --input-bd:#4a3a74;
+      --text-inv:#ffffff;
+    }
+
+    html,body{height:100%;margin:0;padding:0}
+    body{
+      font-family:"Segoe UI", Arial, sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      transition:background .3s, color .3s;
+      min-height:100%;
+    }
+
+    /* ---------- CHATBOT (uses dvh) ---------- */
+    #chatbot-container{
+      position:fixed;
+      left:4vw; right:4vw; bottom:calc(env(safe-area-inset-bottom) + 8px);
+      width:auto;
+      height:80dvh;                /* dynamic viewport height */
+      max-height:85dvh;
+      background:var(--panel);
+      border:2px solid var(--clr-accent);
+      border-radius:18px;
+      box-shadow:0 8px 32px #0006;
+      display:flex; flex-direction:column; overflow:hidden;
+      transition:transform .2s ease, opacity .2s ease, left .1s linear, top .1s linear;
+      z-index:9999;
+    }
+    @media (min-width:900px){
+      #chatbot-container{ width:380px; left:auto; right:24px; bottom:24px; }
+    }
+
+    /* Reopen button (when minimized) */
+    #chat-open-btn{
+      position:fixed; right:20px; bottom:20px;
+      display:none;
+      background:linear-gradient(135deg,var(--clr-primary),var(--clr-accent));
+      color:#fff; border:none; border-radius:999px;
+      padding:.7rem .9rem; box-shadow:0 8px 24px #0007; cursor:pointer;
+      z-index:10000;
+    }
+
+    /* Header (drag handle) */
+    #chatbot-header{
+      display:flex; justify-content:space-between; align-items:center; gap:.5rem;
+      background:linear-gradient(135deg,var(--clr-primary) 0%, var(--clr-accent) 100%);
+      color:var(--text-inv); font-weight:600; font-size:1.1rem; padding:.75rem 1rem; user-select:none;
+      cursor:move;                 /* draggable on all sizes */
+      touch-action:none;           /* allow pointer drag on touch */
+    }
+    #chatbot-header .ctrl{ cursor:pointer; font-size:.75rem; font-weight:600; opacity:.95 }
+    #chatbot-header .ctrl:hover{ opacity:1 }
+
+    /* Minimize (keeps state) */
+    #minimizeBtn{
+      background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff;
+      border-radius:8px; padding:.25rem .45rem; font-size:.8rem; cursor:pointer;
+      margin-left:.5rem;
+    }
+
+    /* Dialogue viewport */
+    #chat-log{ flex:1; overflow-y:auto; overscroll-behavior:contain; padding:1rem; background:var(--panel-3); color:#eee; font-size:.94rem }
+    .chat-msg{ margin:.5rem 0; max-width:90% }
+    .user{ margin-left:auto; background:var(--clr-primary); color:#000; padding:.5rem .7rem; border-radius:14px 14px 0 14px }
+    .bot { margin-right:auto; background:#321b53; color:#fff; padding:.5rem .7rem; border-radius:14px 14px 14px 0 }
+
+    /* Input area */
+    #chatbot-form-container{
+      background:var(--panel-2); border-top:1px solid var(--clr-accent);
+      padding:.6rem .7rem; padding-bottom:calc(.6rem + env(safe-area-inset-bottom));
+    }
+    #chatbot-input-grid{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      gap:.5rem .6rem; align-items:center;
+    }
+
+    /* Row 1: centered brand */
+    #input-toolbar{
+      grid-column:1 / -1; grid-row:1;
+      display:flex; align-items:center; justify-content:center;
+      background:color-mix(in oklab, var(--panel-2) 90%, #000 10%);
+      color:#ddd; border:1px solid color-mix(in oklab, var(--clr-accent) 35%, #000 65%);
+      border-radius:12px; padding:.45rem .6rem; min-height:38px;
+    }
+    #brand{
+      font-size:.92rem; letter-spacing:.04em; font-weight:700; line-height:1;
+      color:#dcd6e9; white-space:nowrap; user-select:none;
+    }
+    #brand .char{ display:inline-block; transform:translateZ(0); }
+
+    @keyframes letter-shine{
+      0%{ color:#dcd6e9; text-shadow:none; }
+      45%{ color:var(--clr-primary); text-shadow:0 0 6px rgba(0,196,255,.65), 0 0 14px rgba(0,196,255,.35); }
+      70%{ color:var(--clr-accent);  text-shadow:0 0 6px rgba(255,59,219,.65), 0 0 14px rgba(255,59,219,.35); }
+      100%{ color:#dcd6e9; text-shadow:none; }
+    }
+    #brand.shine .char{ animation:letter-shine .6s ease forwards; animation-delay:calc(var(--i) * .06s); }
+    @media (hover:hover){
+      #brand:hover .char{ animation:letter-shine .6s ease forwards; animation-delay:calc(var(--i) * .06s); }
+    }
+    @media (prefers-reduced-motion:reduce){
+      #brand.shine .char, #brand:hover .char { animation:none; }
+    }
+
+    /* Row 2: input + vertical buttons */
+    #input-main{ grid-column:1; grid-row:2; display:flex; align-items:flex-end; }
+    #button-stack{ grid-column:2; grid-row:2; display:flex; flex-direction:column; gap:.5rem; align-items:stretch; }
+
+    /* Textarea */
+    #chatbot-input{
+      flex:1; background:var(--input-bg); color:#1a1030;
+      border:1px solid var(--input-bd); border-radius:12px;
+      font-size:.95rem; line-height:1.4; padding:.6rem .7rem;
+      outline:none; resize:none; overflow-y:auto; max-height:3.1em;
+    }
+    body.dark #chatbot-input{ color:#efeaf8; }
+
+    /* Buttons */
+    .btn{
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      background:var(--clr-accent); border:none; color:#fff; font-weight:700;
+      padding:.55rem .85rem; border-radius:10px; cursor:pointer;
+      transition:transform .12s ease, opacity .2s ease, background .2s ease;
+      min-width:44px; min-height:42px;
+    }
+    .btn:active{ transform:scale(.98); }
+    .btn[disabled]{ background:#6a5f77; cursor:not-allowed; opacity:.8; }
+    .btn.secondary{ background:#ff66e7; }
+
+    /* Honeypots (hidden) */
+    .hp-wrap{
+      position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;
+      pointer-events:none;
+    }
+    .hp-label{ display:none !important; }
+
+    /* ====== v2 Modal ====== */
+    .modal-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:center; justify-content:center;
+      z-index:10050;
+    }
+    .modal{
+      background:var(--panel);
+      color:#fff;
+      border:2px solid var(--clr-accent);
+      border-radius:16px;
+      width:min(92vw, 420px);
+      padding:16px;
+      box-shadow:0 12px 40px rgba(0,0,0,.5);
+    }
+    .modal header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-bottom:10px;
+    }
+    .modal h2{ font-size:1rem; margin:0; }
+    .modal .close{
+      background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff;
+      border-radius:8px; padding:.25rem .45rem; font-size:.8rem; cursor:pointer;
+    }
+    .modal .content{ padding:8px 0 0; }
+    .verify-hint{ margin-top:10px; font-size:.88rem; color:#ddd; }
+
+    @media(max-width:480px){
+      #chatbot-container{ left:3vw; right:3vw; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Reopen (when minimized) -->
+  <button id="chat-open-btn" aria-label="Open chat">
+    <i class="fa-solid fa-comments"></i>
+  </button>
+
+  <!-- Chatbot -->
+  <div id="chatbot-container" role="dialog" aria-modal="true" aria-label="Chattia">
+    <div id="chatbot-header">
+      <span id="title" data-en="Chattia" data-es="Chattia">Chattia</span>
+      <div>
+        <span id="langCtrl" class="ctrl" role="button" aria-label="Toggle language">EN</span>
+        &nbsp;|&nbsp;
+        <span id="themeCtrl" class="ctrl" role="button" aria-label="Toggle theme">Dark</span>
+        <button id="minimizeBtn" type="button" title="Minimize">
+          <i class="fa-solid fa-minus"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialogue viewport -->
+    <div id="chat-log" role="log" aria-live="polite" aria-atomic="false"></div>
+
+    <div id="chatbot-form-container">
+      <form id="chatbot-input-grid" autocomplete="off" novalidate>
+        <!-- Row 1: brand -->
+        <div id="input-toolbar" aria-label="Ops Online Support">
+          <div id="brand"
+               data-en="Ops Online Support"
+               data-es="Soporte en Línea OPS"
+               title="Ops Online Support"></div>
+        </div>
+
+        <!-- Row 2: input + buttons -->
+        <div id="input-main">
+          <textarea
+            id="chatbot-input"
+            rows="1"
+            placeholder="Type your message..."
+            required
+            maxlength="512"
+            data-en-ph="Type your message..."
+            data-es-ph="Escriba su mensaje..."></textarea>
+        </div>
+
+        <div id="button-stack">
+          <button id="chatbot-send" type="submit" class="btn" disabled aria-label="Send">
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+          <button id="chatbot-close" type="button" class="btn secondary" aria-label="Close chat">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Hidden honeypots -->
+        <div class="hp-wrap" aria-hidden="true">
+          <label class="hp-label" for="hp_text">Do not fill</label>
+          <input type="text" id="hp_text" name="hp_text" tabindex="-1" autocomplete="off" />
+          <label class="hp-label" for="hp_check">I am human</label>
+          <input type="checkbox" id="hp_check" name="hp_check" tabindex="-1" />
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- reCAPTCHA v2 Modal -->
+  <div id="v2-backdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="v2-title">
+      <header>
+        <h2 id="v2-title">Verify you’re human</h2>
+        <button class="close" type="button" id="v2-close">Close</button>
+      </header>
+      <div class="content">
+        <div id="v2-widget" class="g-recaptcha"></div>
+        <div class="verify-hint">Please complete the checkbox above to continue.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== Config: replace with your real keys/URLs ===== */
+    const RECAPTCHA_V2_SITE_KEY = 'YOUR_RECAPTCHA_V2_SITE_KEY';
+    const RECAPTCHA_V3_SITE_KEY = 'YOUR_RECAPTCHA_V3_SITE_KEY';
+    const WORKER_CHAT_URL        = 'https://your-cloudflare-worker.example.com/chat';
+    const WORKER_END_SESSION_URL = 'https://your-cloudflare-worker.example.com/end-session';
+    const WORKER_HONEYPOT_URL    = 'https://your-cloudflare-worker.example.com/honeypot-trip';
+
+    /* ===== DOM ===== */
+    const qs=(s)=>document.querySelector(s), qsa=(s)=>[...document.querySelectorAll(s)];
+    const container = qs('#chatbot-container');
+    const header    = qs('#chatbot-header');
+    const log       = qs('#chat-log');
+
+    const gridForm  = qs('#chatbot-input-grid');
+    const input     = qs('#chatbot-input');
+    const sendBtn   = qs('#chatbot-send');
+    const closeBtn  = qs('#chatbot-close');
+    const minimizeBtn = qs('#minimizeBtn');
+    const openBtn   = qs('#chat-open-btn');
+    const langCtrl  = qs('#langCtrl');
+    const themeCtrl = qs('#themeCtrl');
+    const brand     = qs('#brand');
+    const transNodes= qsa('[data-en]');
+    const phNodes   = qsa('[data-en-ph]');
+
+    /* Honeypots */
+    const hpText = qs('#hp_text');
+    const hpCheck= qs('#hp_check');
+
+    /* v2 Modal */
+    const v2Backdrop = qs('#v2-backdrop');
+    const v2Close    = qs('#v2-close');
+    const v2WidgetEl = qs('#v2-widget');
+
+    /* ===== State ===== */
+    let v3Ready   = false;
+    let v2Solved  = false;
+    let v2WidgetId = null;
+    let v2Open    = false;
+
+    /* ===== Brand builder (spaces preserved) ===== */
+    function buildBrand(text){
+      brand.innerHTML = '';
+      let i=0;
+      for(const ch of text){
+        const s=document.createElement('span');
+        s.className='char';
+        s.textContent=ch;
+        s.style.setProperty('--i', String(i++));
+        brand.appendChild(s);
+      }
+    }
+    buildBrand(brand.dataset.en || 'Ops Online Support');
+
+    /* Language toggle */
+    langCtrl.textContent = 'ES';
+    langCtrl.addEventListener('click', ()=>{
+      const goES = langCtrl.textContent === 'ES';
+      document.documentElement.lang = goES ? 'es' : 'en';
+      langCtrl.textContent = goES ? 'EN' : 'ES';
+      transNodes.forEach(n => n.textContent = goES ? (n.dataset.es || n.textContent) : (n.dataset.en || n.textContent));
+      phNodes.forEach(n => n.placeholder = goES ? (n.dataset.esPh || n.placeholder) : (n.dataset.enPh || n.placeholder));
+      buildBrand(goES ? (brand.dataset.es || 'Soporte en Línea OPS') : (brand.dataset.en || 'Ops Online Support'));
+    });
+
+    /* Theme toggle */
+    themeCtrl.addEventListener('click', ()=>{
+      const toDark = themeCtrl.textContent === 'Dark';
+      document.body.classList.toggle('dark', toDark);
+      themeCtrl.textContent = toDark ? 'Light' : 'Dark';
+    });
+
+    /* Auto-grow (~2 lines) */
+    function autoGrow(){
+      input.style.height='auto';
+      const maxPx=48;
+      input.style.height=Math.min(input.scrollHeight, maxPx)+'px';
+    }
+    input.addEventListener('input', ()=>{ autoGrow(); maybePromptV2(); updateSendEnabled(); });
+    window.addEventListener('load', ()=>{ autoGrow(); updateSendEnabled(); });
+
+    /* Dialogue helpers */
+    function addMsg(txt, cls){
+      const div=document.createElement('div');
+      div.className='chat-msg '+cls;
+      div.textContent=txt;
+      log.appendChild(div);
+      log.scrollTop=log.scrollHeight;
+    }
+
+    /* ===== Honeypot protection ===== */
+    async function reportHoneypot(reason){
+      try{
+        await fetch(WORKER_HONEYPOT_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ reason, ts: Date.now(), ua: navigator.userAgent })
+        });
+      }catch(e){}
+    }
+    function lockUIForHoneypot(){
+      sendBtn.disabled = true;
+      input.disabled = true;
+      addMsg('Security: blocked due to suspicious activity.', 'bot');
+      alert('Security check failed. This session has been blocked.');
+    }
+    ['change','input','click'].forEach(ev=>{
+      hpText.addEventListener(ev, ()=>{ reportHoneypot('hp_text_touched'); lockUIForHoneypot(); }, { passive:true });
+      hpCheck.addEventListener(ev, ()=>{ reportHoneypot('hp_check_ticked'); lockUIForHoneypot(); }, { passive:true });
+    });
+
+    /* ===== reCAPTCHA API (single load, explicit) ===== */
+    (function loadRecaptcha(){
+      const s=document.createElement('script');
+      s.src='https://www.google.com/recaptcha/api.js?render=explicit';
+      s.async=true; s.defer=true;
+      document.head.appendChild(s);
+    })();
+
+    /* v3 ready poll */
+    const recaptchaPoll = setInterval(()=>{
+      if(window.grecaptcha && typeof grecaptcha.ready==='function'){
+        clearInterval(recaptchaPoll);
+        grecaptcha.ready(()=>{ v3Ready=true; updateSendEnabled(); });
+      }
+    }, 250);
+
+    /* Render v2 widget lazily inside modal */
+    function ensureV2Widget(){
+      if(v2WidgetId!==null || !(window.grecaptcha && grecaptcha.render)) return;
+      v2WidgetId = grecaptcha.render(v2WidgetEl, {
+        sitekey: RECAPTCHA_V2_SITE_KEY,
+        callback: (token)=>{
+          v2Solved = !!token;
+          updateSendEnabled();
+          hideV2Modal();            // auto-close on solve
+        },
+        'expired-callback': ()=>{
+          v2Solved=false; updateSendEnabled();
+        },
+        'error-callback': ()=>{
+          v2Solved=false; updateSendEnabled();
+          alert('reCAPTCHA v2 error, please try again.');
+        }
+      });
+    }
+
+    function showV2Modal(){
+      if(v2Solved || v2Open) return;
+      v2Backdrop.style.display='flex';
+      v2Backdrop.setAttribute('aria-hidden','false');
+      v2Open=true;
+      ensureV2Widget();
+    }
+    function hideV2Modal(){
+      v2Backdrop.style.display='none';
+      v2Backdrop.setAttribute('aria-hidden','true');
+      v2Open=false;
+    }
+    v2Close.addEventListener('click', hideV2Modal);
+    /* click outside modal content → close */
+    v2Backdrop.addEventListener('click', (e)=>{ if(e.target===v2Backdrop) hideV2Modal(); });
+
+    /* ESC key: close modal if open, otherwise close chat */
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape'){
+        if(v2Open){ hideV2Modal(); }
+        else { closeChat(); }
+      }
+    });
+
+    /* Prompt v2 when user starts typing and not solved */
+    function maybePromptV2(){
+      if(input.value.trim().length>0 && !v2Solved) showV2Modal();
+    }
+
+    /* ===== Enable/disable Send (STRICT): requires text + v3 ready + v2 solved ===== */
+    function updateSendEnabled(){
+      const hasText = input.value.trim().length > 0;
+      sendBtn.disabled = !(hasText && v3Ready && v2Solved) || input.disabled;
+    }
+
+    /* ===== Enter to submit (Shift+Enter = newline) ===== */
+    input.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter' && !e.shiftKey){
+        e.preventDefault();
+        if(sendBtn.disabled){
+          if(!v2Solved) showV2Modal();   // nudge to solve v2
+          return;
+        }
+        gridForm.requestSubmit();
+      }
+    });
+
+    /* ===== Submit ===== */
+    gridForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+
+      if (hpText.value.trim() !== '' || hpCheck.checked) {
+        await reportHoneypot('honeypot_on_submit');
+        lockUIForHoneypot();
+        return;
+      }
+
+      if(sendBtn.disabled){ return; }
+
+      const msg = input.value.trim();
+      if(!msg){ updateSendEnabled(); return; }
+
+      // Append user message immediately
+      addMsg(msg,'user');
+      input.value=''; autoGrow(); updateSendEnabled();
+      addMsg('…','bot');
+
+      // v3 token per request
+      let v3token='';
+      try{
+        v3token = await grecaptcha.execute(RECAPTCHA_V3_SITE_KEY, { action:'chat_send' });
+      }catch(err){
+        log.lastChild.textContent = 'Security: reCAPTCHA v3 unavailable. Try again later.';
+        return;
+      }
+
+      // Send to Worker with v2 solved + v3 token
+      try{
+        const r = await fetch(WORKER_CHAT_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            message: msg,
+            recaptchaV2Solved: v2Solved,
+            recaptchaV3Token: v3token
+          })
+        });
+        const d = await r.json();
+        log.lastChild.textContent = d.reply || 'No reply.';
+      }catch{
+        log.lastChild.textContent = 'Error: Can’t reach AI.';
+      }
+    });
+
+    /* ===== Close (X) — clear, terminate, fully close ===== */
+    async function terminateSession(){
+      try{ await fetch(WORKER_END_SESSION_URL, { method:'POST' }); }catch(e){}
+    }
+    function clearUIState(){
+      log.innerHTML='';
+      input.value='';
+      autoGrow();
+      updateSendEnabled();
+    }
+    function closeChat(){
+      clearUIState();
+      terminateSession();                  // async fire-and-forget
+      container.style.display='none';
+      container.setAttribute('aria-hidden','true');
+      openBtn.style.display='none';        // fully closed (no reopen FAB)
+      openBtn.setAttribute('aria-expanded','false');
+      hideV2Modal();
+    }
+    closeBtn.addEventListener('click', closeChat);
+
+    /* ===== Minimize — keep state, allow reopen ===== */
+    function minimizeChat(){
+      container.style.display='none';
+      container.setAttribute('aria-hidden','true');
+      openBtn.style.display='inline-flex';
+      openBtn.setAttribute('aria-expanded','false');
+    }
+    function openChat(){
+      container.style.display='';
+      container.removeAttribute('aria-hidden');
+      openBtn.style.display='none';
+      openBtn.setAttribute('aria-expanded','true');
+    }
+    minimizeBtn.addEventListener('click', minimizeChat);
+    openBtn.addEventListener('click', openChat);
+
+    /* ===== Header drag (draggable enabled) ===== */
+    let dragging=false, dragStart={x:0,y:0}, boxStart={x:0,y:0};
+    function ensureAbsPosition(){
+      const rect=container.getBoundingClientRect();
+      container.style.left = rect.left + 'px';
+      container.style.top  = rect.top  + 'px';
+      container.style.right='auto';
+      container.style.bottom='auto';
+    }
+    function clampToViewport(x,y){
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const rect = container.getBoundingClientRect();
+      const maxX = vw - rect.width;
+      const maxY = vh - rect.height;
+      return { x: Math.max(0, Math.min(x, maxX)), y: Math.max(0, Math.min(y, maxY)) };
+    }
+    header.addEventListener('pointerdown', (e)=>{
+      dragging=true;
+      header.setPointerCapture?.(e.pointerId);
+      ensureAbsPosition();
+      const rect=container.getBoundingClientRect();
+      dragStart.x = e.clientX; dragStart.y = e.clientY;
+      boxStart.x  = rect.left;  boxStart.y  = rect.top;
+    });
+    header.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      const dx=e.clientX - dragStart.x;
+      const dy=e.clientY - dragStart.y;
+      const t = clampToViewport(boxStart.x + dx, boxStart.y + dy);
+      container.style.left = t.x + 'px';
+      container.style.top  = t.y + 'px';
+    });
+    const endDrag = (e)=>{
+      if(!dragging) return;
+      dragging=false;
+      header.releasePointerCapture?.(e.pointerId);
+    };
+    header.addEventListener('pointerup', endDrag);
+    header.addEventListener('pointercancel', endDrag);
+
+    /* ===== One-time brand shine ===== */
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function playShine(){
+      if(reducedMotion) return;
+      brand.classList.remove('shine'); void brand.offsetWidth; brand.classList.add('shine');
+      setTimeout(()=> brand.classList.remove('shine'), 1200);
+    }
+    window.addEventListener('load', ()=> setTimeout(playShine, 350), { once:true });
+  </script>
+
+  <!-- Single reCAPTCHA API load (explicit). Used for: v2 render + v3 execute(sitekey). -->
+  <script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
+</body>
+</html>
