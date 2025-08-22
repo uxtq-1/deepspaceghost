@@ -1,3 +1,9 @@
+/* ===========================
+   Chattia UI — Hardened CSS
+   Aligned with OPS Core: accessible focus rings, safe colors,
+   reduced motion support, dvh usage, and mobile-first layout.
+   =========================== */
+
 :root{
   --clr-primary:#00c4ff;
   --clr-accent:#ff3bdb;
@@ -10,6 +16,8 @@
   --input-bg:#f5f2fa;
   --input-bd:#cbb3f6;
   --text-inv:#ffffff;
+
+  --focus:#7ad1ff;
 }
 body.dark{
   --bg:#121212;
@@ -20,11 +28,17 @@ body.dark{
   --input-bg:#261d3f;
   --input-bd:#4a3a74;
   --text-inv:#ffffff;
+
+  --focus:#9ae1ff;
 }
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
 
 html,body{height:100%;margin:0;padding:0}
 body{
-  font-family:"Segoe UI", Arial, sans-serif;
+  font-family:system-ui, "Segoe UI", Roboto, Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
   transition:background .3s, color .3s;
@@ -59,6 +73,10 @@ body{
   padding:.7rem .9rem; box-shadow:0 8px 24px #0007; cursor:pointer;
   z-index:10000;
 }
+#chat-open-btn:focus-visible{
+  outline:3px solid var(--focus);
+  outline-offset:2px;
+}
 
 /* Header (drag handle) */
 #chatbot-header{
@@ -68,19 +86,32 @@ body{
   cursor:move;                 /* draggable on all sizes */
   touch-action:none;           /* allow pointer drag on touch */
 }
-#chatbot-header .ctrl{ cursor:pointer; font-size:.75rem; font-weight:600; opacity:.95 }
+#chatbot-header .ctrl{
+  cursor:pointer; font-size:.75rem; font-weight:600; opacity:.95;
+  background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.4);
+  border-radius:8px; padding:.15rem .45rem;
+}
+#chatbot-header .ctrl:focus-visible{
+  outline:3px solid var(--focus);
+  outline-offset:2px;
+}
 #chatbot-header .ctrl:hover{ opacity:1 }
 
-/* Minimize (keeps state) */
 #minimizeBtn{
   background:transparent; border:1px solid rgba(255,255,255,.7); color:#fff;
   border-radius:8px; padding:.25rem .45rem; font-size:.8rem; cursor:pointer;
   margin-left:.5rem;
 }
+#minimizeBtn:focus-visible{
+  outline:3px solid var(--focus);
+  outline-offset:2px;
+}
 
 /* Dialogue viewport */
-#chat-log{ flex:1; overflow-y:auto; overscroll-behavior:contain; padding:1rem; background:var(--panel-3); color:#eee; font-size:.94rem }
-.chat-msg{ margin:.5rem 0; max-width:90% }
+#chat-log{
+  flex:1; overflow-y:auto; overscroll-behavior:contain; padding:1rem; background:var(--panel-3); color:#eee; font-size:.94rem
+}
+.chat-msg{ margin:.5rem 0; max-width:90%; word-wrap:break-word; }
 .user{ margin-left:auto; background:var(--clr-primary); color:#000; padding:.5rem .7rem; border-radius:14px 14px 0 14px }
 .bot { margin-right:auto; background:#321b53; color:#fff; padding:.5rem .7rem; border-radius:14px 14px 14px 0 }
 
@@ -136,6 +167,10 @@ body{
   outline:none; resize:none; overflow-y:auto; max-height:3.1em;
 }
 body.dark #chatbot-input{ color:#efeaf8; }
+#chatbot-input:focus-visible{
+  outline:3px solid var(--focus);
+  outline-offset:2px;
+}
 
 /* Buttons */
 .btn{
@@ -148,6 +183,10 @@ body.dark #chatbot-input{ color:#efeaf8; }
 .btn:active{ transform:scale(.98); }
 .btn[disabled]{ background:#6a5f77; cursor:not-allowed; opacity:.8; }
 .btn.secondary{ background:#ff66e7; }
+.btn:focus-visible{
+  outline:3px solid var(--focus);
+  outline-offset:2px;
+}
 
 /* Honeypots (hidden) */
 .hp-wrap{
