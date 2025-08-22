@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>Chattia</title>
-
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Chatbot Test Page</title>
   <!--
     Content Security Policy (CSP)
     - Helps prevent XSS and other injection attacks by defining trusted sources.
@@ -40,11 +39,21 @@
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
-
   <style>
     :root{
       --clr-primary:#00c4ff;
       --clr-accent:#ff3bdb;
+
+      --clr-coral-pink: #FF6F61;
+      --clr-aqua-blue: #4DCED1;
+      --clr-mint-green: #98FF98;
+      --clr-sunset-orange: #FF7043;
+      --clr-ocean-blue: #1E88E5;
+      --clr-lavender-purple: #B39DDB;
+      --clr-peach: #FF9E80;
+      --clr-rose-red: #E91E63;
+      --clr-turquoise: #40E0D0;
+      --clr-sky-blue: #87CEFA;
 
       --bg:#ffffff;
       --text:#333333;
@@ -82,7 +91,7 @@
       width:auto;
       height:80dvh;                /* dynamic viewport height */
       max-height:85dvh;
-      background:var(--panel);
+      background:linear-gradient(135deg, var(--clr-sky-blue), var(--clr-aqua-blue));
       border:2px solid var(--clr-accent);
       border-radius:18px;
       box-shadow:0 8px 32px #0006;
@@ -123,7 +132,7 @@
     }
 
     /* Dialogue viewport */
-    #chat-log{ flex:1; overflow-y:auto; overscroll-behavior:contain; padding:1rem; background:var(--panel-3); color:#eee; font-size:.94rem }
+    #chat-log{ flex:1; overflow-y:auto; overscroll-behavior:contain; padding:1rem; background:var(--panel-3); color:#333; font-size:.94rem; transition:background .5s ease; }
     .chat-msg{ margin:.5rem 0; max-width:90% }
     .user{ margin-left:auto; background:var(--clr-primary); color:#000; padding:.5rem .7rem; border-radius:14px 14px 0 14px }
     .bot { margin-right:auto; background:#321b53; color:#fff; padding:.5rem .7rem; border-radius:14px 14px 14px 0 }
@@ -469,6 +478,10 @@
       input.value=''; autoGrow(); updateSendEnabled();
       addMsg('…','bot');
 
+      // Cycle dialogue background color
+      paletteIndex = (paletteIndex + 1) % summerPalette.length;
+      log.style.background = summerPalette[paletteIndex];
+
       // Send to Worker
       try{
         /*
@@ -587,6 +600,5 @@
     }
     window.addEventListener('load', ()=> setTimeout(playShine, 350), { once:true });
   </script>
-
 </body>
 </html>
