@@ -5,6 +5,33 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
   <title>Chattia</title>
 
+  <!--
+    Content Security Policy (CSP)
+    - Helps prevent XSS and other injection attacks by defining trusted sources.
+    - 'unsafe-inline' for style-src is needed due to dynamic style changes in JS.
+      Refactoring the JS to avoid this would be a further improvement.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    base-uri 'self';
+    object-src 'none';
+    frame-ancestors 'none';
+    style-src 'self' 'sha256-NimrJfuuggut/Fy68hXC+lQxyTwUnwJeCzX660ZH6TQ=' https://cdnjs.cloudflare.com 'unsafe-inline' https://*.hcaptcha.com;
+    font-src https://cdnjs.cloudflare.com;
+    script-src 'self' 'sha256-TJu4V1T0Vo04/vWZVmsMlkYJgjC5P4RJLvVa+X22vHk=' https://js.hcaptcha.com https://*.hcaptcha.com;
+    connect-src https://your-cloudflare-worker.example.com https://*.hcaptcha.com;
+    frame-src https://*.hcaptcha.com;
+  ">
+
+  <!-- Additional Security Headers (aligns with OPS Framework) -->
+  <meta name="referrer-policy" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+  <meta http-equiv="Cross-Origin-Resource-Policy" content="same-origin">
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), midi=(), microphone=(), camera=(), magnetometer=(), gyroscope=(), speaker=(), vibrate=(), fullscreen=(), payment=()">
+
+  <!-- hCaptcha Script (required for bot protection) -->
+  <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+
   <!-- Font Awesome 6 (Cloudflare CDN, SRI, CORS-safe) -->
   <link
     rel="stylesheet"
@@ -232,12 +259,14 @@
           </button>
         </div>
 
-        <!-- Hidden honeypots -->
-        <div class="hp-wrap" aria-hidden="true">
-          <label class="hp-label" for="hp_text">Do not fill</label>
-          <input type="text" id="hp_text" name="hp_text" tabindex="-1" autocomplete="off" />
-          <label class="hp-label" for="hp_check">I am human</label>
-          <input type="checkbox" id="hp_check" name="hp_check" tabindex="-1" />
+        <!-- hCaptcha widget (replaces honeypot) -->
+        <div id="captcha-container" style="grid-column: 1 / -1; display: flex; justify-content: center; padding: 0.5rem 0;">
+          <!--
+            The sitekey is a test key from hCaptcha docs.
+            Replace with a real sitekey for production.
+            The 'dark' theme is used to match the chatbot UI.
+          -->
+          <div class="h-captcha" data-sitekey="10000000-0000-0000-0000-000000000001" data-theme="dark"></div>
         </div>
       </form>
     </div>
@@ -245,9 +274,50 @@
 
   <script>
     /* ===== Config: replace with your real keys/URLs ===== */
+    /*
+      IMPORTANT BACKEND SECURITY REQUIREMENTS (as per OPS Cyber Security Core Framework)
+
+      The backend Cloudflare Worker must implement the following server-side controls.
+      These are not optional and are required for compliance with the framework.
+
+      1. Data Minimisation & Privacy (GDPR Art. 5, ISO 27001 A.5.14)
+         - PII GATE: The worker must act as a "PII Gate". It must validate all
+           incoming message payloads against a strict schema. Any unexpected fields
+           or data should be dropped immediately.
+         - PII REDACTION: Before forwarding any user message to a third-party LLM,
+           the worker must redact all PII (names, emails, phone numbers, etc.).
+         - EPHEMERAL MEMORY: The worker must enforce ephemeral memory. Raw user
+           prompts containing PII must not be stored long-term. All logs and
+           identifiers must have short TTLs.
+
+      2. AI/LLM Guardrails (NIST AI RMF, OWASP Top 10 for LLMs)
+         - PROMPT FIREWALL: All user input must be treated as hostile. The worker must
+           validate, sanitize, and isolate user input to prevent prompt injection,
+           indirect prompt attacks, and other LLM-specific vulnerabilities.
+         - OUTPUT SCRUBBING: The worker must inspect the response from the LLM before
+           sending it to the client. It should scrub the output for any sensitive
+           information, PII, or harmful content.
+
+      3. Authentication, Authorization, and Validation
+         - hCAPTCHA VERIFICATION: The worker MUST verify the `h-captcha-response` token
+           with the hCaptcha API for every chat message. Reject requests without a
+           valid token.
+         - CSRF TOKEN VERIFICATION: The worker MUST validate the `X-CSRF-Token` header
+           against the value stored in the user's session. Reject requests with an
+           invalid or missing token.
+         - RATE LIMITING: Implement strict rate limiting on all endpoints to prevent
+           abuse and DoS attacks.
+
+      4. Secure Development & Operations (NIST SP 800-218, ISO 27001)
+         - SECURE ERROR HANDLING: Return generic error messages to the client. Log
+           detailed errors securely on the server-side.
+         - CORS: Configure a strict Cross-Origin Resource Sharing policy that only
+           allows requests from the chatbot's authorized domain.
+    */
     const WORKER_CHAT_URL        = 'https://your-cloudflare-worker.example.com/chat';
     const WORKER_END_SESSION_URL = 'https://your-cloudflare-worker.example.com/end-session';
-    const WORKER_HONEYPOT_URL    = 'https://your-cloudflare-worker.example.com/honeypot-trip';
+    const WORKER_CSRF_TOKEN_URL  = 'https://your-cloudflare-worker.example.com/csrf-token';
+    /* Note: WORKER_HONEYPOT_URL has been removed as hCaptcha is now used. */
 
     /* ===== DOM ===== */
     const qs=(s)=>document.querySelector(s), qsa=(s)=>[...document.querySelectorAll(s)];
@@ -267,11 +337,39 @@
     const transNodes= qsa('[data-en]');
     const phNodes   = qsa('[data-en-ph]');
 
-    /* Honeypots */
-    const hpText = qs('#hp_text');
-    const hpCheck= qs('#hp_check');
-
     /* ===== State ===== */
+    let csrfToken = null;
+
+    /* ===== CSRF Token Fetching ===== */
+    /*
+      SERVER-SIDE CSRF IMPLEMENTATION IS MANDATORY.
+      The backend must:
+      1. Implement the `/csrf-token` endpoint.
+      2. On first request from a client, generate a secure, random token and
+         store it in a server-side session associated with the client.
+      3. Send this token back to the client.
+      4. For all subsequent state-changing requests (like POST), require the
+         client to send the token in an `X-CSRF-Token` header.
+      5. Verify that the token from the header matches the one in the session.
+         If they do not match, or if the header is missing, reject the request
+         with a 403 Forbidden error.
+    */
+    async function fetchCsrfToken() {
+      try {
+        const r = await fetch(WORKER_CSRF_TOKEN_URL);
+        const d = await r.json();
+        if (d.token) {
+          csrfToken = d.token;
+        } else {
+          throw new Error('CSRF token not found in response');
+        }
+      } catch (e) {
+        console.error('CSRF initialization failed:', e);
+        addMsg('A security error occurred. Please refresh the page.', 'bot');
+        input.disabled = true;
+        sendBtn.disabled = true;
+      }
+    }
 
     /* ===== Brand builder (spaces preserved) ===== */
     function buildBrand(text){
@@ -312,7 +410,11 @@
       input.style.height=Math.min(input.scrollHeight, maxPx)+'px';
     }
     input.addEventListener('input', ()=>{ autoGrow(); updateSendEnabled(); });
-    window.addEventListener('load', ()=>{ autoGrow(); updateSendEnabled(); });
+    window.addEventListener('load', ()=>{
+      autoGrow();
+      updateSendEnabled();
+      fetchCsrfToken(); // Fetch CSRF token on load
+    });
 
     /* Dialogue helpers */
     function addMsg(txt, cls){
@@ -323,27 +425,6 @@
       log.scrollTop=log.scrollHeight;
     }
 
-    /* ===== Honeypot protection ===== */
-    async function reportHoneypot(reason){
-      try{
-        await fetch(WORKER_HONEYPOT_URL, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ reason, ts: Date.now(), ua: navigator.userAgent })
-        });
-      }catch(e){}
-    }
-    function lockUIForHoneypot(){
-      sendBtn.disabled = true;
-      input.disabled = true;
-      addMsg('Security: blocked due to suspicious activity.', 'bot');
-      alert('Security check failed. This session has been blocked.');
-    }
-    ['change','input','click'].forEach(ev=>{
-      hpText.addEventListener(ev, ()=>{ reportHoneypot('hp_text_touched'); lockUIForHoneypot(); }, { passive:true });
-      hpCheck.addEventListener(ev, ()=>{ reportHoneypot('hp_check_ticked'); lockUIForHoneypot(); }, { passive:true });
-    });
-    
     /* ESC key: close chat */
     document.addEventListener('keydown', (e)=>{
       if(e.key==='Escape'){
@@ -371,17 +452,17 @@
     /* ===== Submit ===== */
     gridForm.addEventListener('submit', async (e)=>{
       e.preventDefault();
-
-      if (hpText.value.trim() !== '' || hpCheck.checked) {
-        await reportHoneypot('honeypot_on_submit');
-        lockUIForHoneypot();
-        return;
-      }
-
       if(sendBtn.disabled){ return; }
 
       const msg = input.value.trim();
       if(!msg){ updateSendEnabled(); return; }
+
+      // Verify hCaptcha response is present
+      const hCaptchaResponse = gridForm.querySelector('[name=h-captcha-response]')?.value;
+      if (!hCaptchaResponse) {
+        addMsg('Please complete the security check before sending a message.', 'bot');
+        return;
+      }
 
       // Append user message immediately
       addMsg(msg,'user');
@@ -390,11 +471,22 @@
 
       // Send to Worker
       try{
+        /*
+          SERVER-SIDE hCAPTCHA VERIFICATION IS MANDATORY.
+          The backend worker MUST take the 'h-captcha-response' token, combine it
+          with the hCaptcha secret key, and send it to https://api.hcaptcha.com/siteverify.
+          The worker should only proceed if the response from hCaptcha is { "success": true }.
+          NEVER TRUST THE CLIENT-SIDE VALIDATION ALONE.
+        */
         const r = await fetch(WORKER_CHAT_URL, {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
+          headers:{
+            'Content-Type':'application/json',
+            'X-CSRF-Token': csrfToken
+          },
           body: JSON.stringify({
-            message: msg
+            message: msg,
+            'h-captcha-response': hCaptchaResponse
           })
         });
         const d = await r.json();
@@ -406,7 +498,12 @@
 
     /* ===== Close (X) — clear, terminate, fully close ===== */
     async function terminateSession(){
-      try{ await fetch(WORKER_END_SESSION_URL, { method:'POST' }); }catch(e){}
+      try{
+        await fetch(WORKER_END_SESSION_URL, {
+          method:'POST',
+          headers: { 'X-CSRF-Token': csrfToken }
+        });
+      }catch(e){}
     }
     function clearUIState(){
       log.innerHTML='';
