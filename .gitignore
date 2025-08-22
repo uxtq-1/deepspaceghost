@@ -1,1 +1,6 @@
-functions/node_modules/
+node_modules/
+build/
+.dart_tool/
+.packages
+flutter_app/build/
+flutter_app/.dart_tool/
