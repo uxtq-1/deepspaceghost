@@ -57,10 +57,11 @@ function buildChatbotUI() {
       <div id="chatbot-header">
         <span id="title" data-en="Chattia" data-es="Chattia">Chattia</span>
         <div>
-          <button id="langEN" class="ctrl" type="button" aria-pressed="true">EN</button>
-          <button id="langES" class="ctrl" type="button" aria-pressed="false">ES</button>
-          <button id="lightCtrl" class="ctrl" type="button" aria-pressed="true" data-en="Light" data-es="Claro">Light</button>
-          <button id="darkCtrl" class="ctrl" type="button" aria-pressed="false" data-en="Dark" data-es="Oscuro">Dark</button>
+          <button id="langCtrl" class="ctrl" type="button" aria-pressed="false">EN</button>
+          <button id="themeCtrl" class="ctrl" type="button"
+            data-en-light="Light" data-es-light="Claro"
+            data-en-dark="Dark" data-es-dark="Oscuro"
+            aria-pressed="false">Light</button>
           <button id="minimizeBtn" type="button" title="Minimize" aria-label="Minimize chat">
             <i class="fa-solid fa-minus" aria-hidden="true"></i>
           </button>
@@ -135,10 +136,8 @@ function initChatbot() {
   const closeBtn = qs('#chatbot-close');
   const minimizeBtn = qs('#minimizeBtn');
   const openBtn = qs('#chat-open-btn');
-  const langEN = qs('#langEN');
-  const langES = qs('#langES');
-  const lightCtrl = qs('#lightCtrl');
-  const darkCtrl = qs('#darkCtrl');
+  const langCtrl = qs('#langCtrl');
+  const themeCtrl = qs('#themeCtrl');
   const brand = qs('#brand');
   const transNodes = qsa('[data-en]');
   const phNodes = qsa('[data-en-ph]');
@@ -157,28 +156,42 @@ function initChatbot() {
       brand.appendChild(s);
     }
   }
-  buildBrand(brand.dataset.en || 'Ops Online Support');
+  // brand will be initialized in setLanguage
 
-  // Language controls
+  let isES = false;
+  let isDark = false;
+
+  function updateThemeLabel() {
+    const label = isES
+      ? (isDark ? themeCtrl.dataset.esDark : themeCtrl.dataset.esLight)
+      : (isDark ? themeCtrl.dataset.enDark : themeCtrl.dataset.enLight);
+    themeCtrl.textContent = label;
+  }
+
+  // Language control
   function setLanguage(toES) {
+    isES = toES;
     document.documentElement.lang = toES ? 'es' : 'en';
-    langEN.setAttribute('aria-pressed', String(!toES));
-    langES.setAttribute('aria-pressed', String(toES));
+    langCtrl.setAttribute('aria-pressed', String(toES));
+    langCtrl.textContent = toES ? 'ES' : 'EN';
     transNodes.forEach(n => n.textContent = toES ? (n.dataset.es || n.textContent) : (n.dataset.en || n.textContent));
     phNodes.forEach(n => n.placeholder = toES ? (n.dataset.esPh || n.placeholder) : (n.dataset.enPh || n.placeholder));
     buildBrand(toES ? (brand.dataset.es || 'Soporte en Línea OPS') : (brand.dataset.en || 'Ops Online Support'));
+    updateThemeLabel();
   }
-  langEN.addEventListener('click', () => setLanguage(false));
-  langES.addEventListener('click', () => setLanguage(true));
+  langCtrl.addEventListener('click', () => setLanguage(!isES));
 
-  // Theme controls
+  // Theme control
   function setTheme(dark) {
+    isDark = dark;
     document.body.classList.toggle('dark', dark);
-    lightCtrl.setAttribute('aria-pressed', String(!dark));
-    darkCtrl.setAttribute('aria-pressed', String(dark));
+    themeCtrl.setAttribute('aria-pressed', String(dark));
+    updateThemeLabel();
   }
-  lightCtrl.addEventListener('click', () => setTheme(false));
-  darkCtrl.addEventListener('click', () => setTheme(true));
+  themeCtrl.addEventListener('click', () => setTheme(!isDark));
+
+  setLanguage(false);
+  setTheme(false);
 
   // Auto-grow (~3 lines)
   function autoGrow() {
