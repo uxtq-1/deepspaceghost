@@ -57,8 +57,10 @@ function buildChatbotUI() {
       <div id="chatbot-header">
         <span id="title" data-en="Chattia" data-es="Chattia">Chattia</span>
         <div>
-          <button id="langCtrl" class="ctrl" type="button" aria-pressed="false" aria-label="Toggle language">EN</button>
-          <button id="themeCtrl" class="ctrl" type="button" aria-pressed="false" aria-label="Toggle theme">Dark</button>
+          <button id="langEN" class="ctrl" type="button" aria-pressed="true">EN</button>
+          <button id="langES" class="ctrl" type="button" aria-pressed="false">ES</button>
+          <button id="lightCtrl" class="ctrl" type="button" aria-pressed="true" data-en="Light" data-es="Claro">Light</button>
+          <button id="darkCtrl" class="ctrl" type="button" aria-pressed="false" data-en="Dark" data-es="Oscuro">Dark</button>
           <button id="minimizeBtn" type="button" title="Minimize" aria-label="Minimize chat">
             <i class="fa-solid fa-minus" aria-hidden="true"></i>
           </button>
@@ -82,15 +84,15 @@ function buildChatbotUI() {
           <div id="input-main">
             <textarea
               id="chatbot-input"
-              rows="1"
-              placeholder="Type your message..."
+              rows="3"
+              placeholder="Place your message here..."
               required
               maxlength="512"
               inputmode="text"
               autocapitalize="sentences"
               autocomplete="off"
-              data-en-ph="Type your message..."
-              data-es-ph="Escriba su mensaje..."></textarea>
+              data-en-ph="Place your message here..."
+              data-es-ph="Coloque su mensaje aquí..."></textarea>
           </div>
 
           <div id="button-stack">
@@ -133,8 +135,10 @@ function initChatbot() {
   const closeBtn = qs('#chatbot-close');
   const minimizeBtn = qs('#minimizeBtn');
   const openBtn = qs('#chat-open-btn');
-  const langCtrl = qs('#langCtrl');
-  const themeCtrl = qs('#themeCtrl');
+  const langEN = qs('#langEN');
+  const langES = qs('#langES');
+  const lightCtrl = qs('#lightCtrl');
+  const darkCtrl = qs('#darkCtrl');
   const brand = qs('#brand');
   const transNodes = qsa('[data-en]');
   const phNodes = qsa('[data-en-ph]');
@@ -155,30 +159,31 @@ function initChatbot() {
   }
   buildBrand(brand.dataset.en || 'Ops Online Support');
 
-  // Language toggle
-  langCtrl.textContent = 'ES';
-  langCtrl.addEventListener('click', () => {
-    const goES = langCtrl.textContent === 'ES';
-    document.documentElement.lang = goES ? 'es' : 'en';
-    langCtrl.textContent = goES ? 'EN' : 'ES';
-    langCtrl.setAttribute('aria-pressed', String(goES));
-    transNodes.forEach(n => n.textContent = goES ? (n.dataset.es || n.textContent) : (n.dataset.en || n.textContent));
-    phNodes.forEach(n => n.placeholder = goES ? (n.dataset.esPh || n.placeholder) : (n.dataset.enPh || n.placeholder));
-    buildBrand(goES ? (brand.dataset.es || 'Soporte en Línea OPS') : (brand.dataset.en || 'Ops Online Support'));
-  });
+  // Language controls
+  function setLanguage(toES) {
+    document.documentElement.lang = toES ? 'es' : 'en';
+    langEN.setAttribute('aria-pressed', String(!toES));
+    langES.setAttribute('aria-pressed', String(toES));
+    transNodes.forEach(n => n.textContent = toES ? (n.dataset.es || n.textContent) : (n.dataset.en || n.textContent));
+    phNodes.forEach(n => n.placeholder = toES ? (n.dataset.esPh || n.placeholder) : (n.dataset.enPh || n.placeholder));
+    buildBrand(toES ? (brand.dataset.es || 'Soporte en Línea OPS') : (brand.dataset.en || 'Ops Online Support'));
+  }
+  langEN.addEventListener('click', () => setLanguage(false));
+  langES.addEventListener('click', () => setLanguage(true));
 
-  // Theme toggle
-  themeCtrl.addEventListener('click', () => {
-    const toDark = themeCtrl.textContent === 'Dark';
-    document.body.classList.toggle('dark', toDark);
-    themeCtrl.textContent = toDark ? 'Light' : 'Dark';
-    themeCtrl.setAttribute('aria-pressed', String(toDark));
-  });
+  // Theme controls
+  function setTheme(dark) {
+    document.body.classList.toggle('dark', dark);
+    lightCtrl.setAttribute('aria-pressed', String(!dark));
+    darkCtrl.setAttribute('aria-pressed', String(dark));
+  }
+  lightCtrl.addEventListener('click', () => setTheme(false));
+  darkCtrl.addEventListener('click', () => setTheme(true));
 
-  // Auto-grow (~2 lines)
+  // Auto-grow (~3 lines)
   function autoGrow() {
     input.style.height = 'auto';
-    const maxPx = 48;
+    const maxPx = 84;
     input.style.height = Math.min(input.scrollHeight, maxPx) + 'px';
   }
   input.addEventListener('input', () => { autoGrow(); updateSendEnabled(); });
