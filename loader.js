@@ -1,40 +1,58 @@
-// This is the loader script. It will be the single entry point for users.
-// It is responsible for loading the chatbot's CSS and main JavaScript file.
+/* =================================================
+   Chattia Loader — Single Entry Point
+   - Resolves its own base URL safely
+   - Loads CSS + main JS from the same origin/path
+   - Adds referrerPolicy, crossorigin; avoids duplicates
+   ================================================= */
 
-(function() {
-    // --- CONFIGURATION ---
-    // --- CONFIGURATION ---
-    // This is the base URL where you will host the chatbot assets.
-    // The user of this script will need to change this to their own hosting URL.
-    const SCRIPT_BASE_URL = 'https://your-hosting-provider.com/path/to/assets';
+(function(){
+  'use strict';
 
-    // --- SCRIPT LOGIC ---
+  // Optional: hardcode if hosting assets elsewhere. Otherwise, auto-detect.
+  const SCRIPT_BASE_URL = ''; // e.g., 'https://your-cdn.example.com/chattia'
 
-    // Get the current script tag to find the base path if not configured
-    // This is a more advanced (but robust) way to let the script find its own assets
-    const thisScript = document.currentScript;
-    let baseUrl = SCRIPT_BASE_URL;
+  // Prevent double-loading
+  if (window.__CHATTIA_LOADER__) return;
+  window.__CHATTIA_LOADER__ = true;
 
-    if (thisScript && thisScript.src.includes('loader.js')) {
-        // Automatically determine base URL from the loader script's own path
-        baseUrl = thisScript.src.substring(0, thisScript.src.lastIndexOf('/'));
-    }
+  // Determine base URL
+  const thisScript = document.currentScript;
+  let baseUrl = SCRIPT_BASE_URL && SCRIPT_BASE_URL.trim() ? SCRIPT_BASE_URL.trim() : '';
+  if (!baseUrl && thisScript && thisScript.src) {
+    baseUrl = thisScript.src.substring(0, thisScript.src.lastIndexOf('/'));
+  }
+  if (!baseUrl) {
+    console.error('Chattia Loader: Could not resolve base URL.');
+    return;
+  }
 
-    console.log("Chatbot Loader: Loading assets from", baseUrl);
+  // Avoid duplicates
+  function alreadyLoaded(hrefOrSrc) {
+    const s = [...document.scripts].some(el => el.src === hrefOrSrc);
+    const l = [...document.querySelectorAll('link[rel="stylesheet"]')].some(el => el.href === hrefOrSrc);
+    return s || l;
+  }
 
-    // 1. Load the CSS file
-    const cssFile = 'chatbot.css';
+  // 1) Load CSS
+  const cssHref = `${baseUrl}/chatbot.css`;
+  if (!alreadyLoaded(cssHref)) {
     const cssLink = document.createElement('link');
     cssLink.rel = 'stylesheet';
     cssLink.type = 'text/css';
-    cssLink.href = `${baseUrl}/${cssFile}`;
+    cssLink.href = cssHref;
+    cssLink.referrerPolicy = 'no-referrer';
+    cssLink.crossOrigin = 'anonymous';
     document.head.appendChild(cssLink);
+  }
 
-    // 2. Load the main chatbot JavaScript file
-    const jsFile = 'chatbot.js';
+  // 2) Load main JS
+  const jsSrc = `${baseUrl}/chatbot.js`;
+  if (!alreadyLoaded(jsSrc)) {
     const jsScript = document.createElement('script');
-    jsScript.src = `${baseUrl}/${jsFile}`;
-    jsScript.defer = true; // Defer execution until the document is parsed
+    jsScript.src = jsSrc;
+    jsScript.defer = true;
+    jsScript.referrerPolicy = 'no-referrer';
+    jsScript.crossOrigin = 'anonymous';
     document.head.appendChild(jsScript);
-
+  }
 })();
